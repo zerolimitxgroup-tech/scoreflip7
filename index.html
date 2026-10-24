@@ -964,6 +964,75 @@
     font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
     text-transform: uppercase; color: var(--veng);
   }
+
+  /* Lucky 13 card states */
+  .num-card.lucky13-one {
+    background: var(--blue); color: white;
+    border-color: #7aa5ff; box-shadow: 0 2px 10px var(--blue-glow);
+  }
+
+  .num-card.lucky13-two {
+    background: linear-gradient(135deg, var(--gold), #ffaa33); color: #1a1000;
+    border-color: var(--gold); box-shadow: 0 2px 12px var(--gold-glow);
+  }
+
+  .num-card .lucky13-badge {
+    position: absolute; top: -4px; right: -4px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--gold); color: #1a1000;
+    font-size: 9px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+
+  .num-card { position: relative; }
+
+  /* Input mode toggle */
+  .prc-input-toggle {
+    display: flex; gap: 0; margin-bottom: 12px;
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: 20px; overflow: hidden;
+  }
+
+  .prc-input-toggle-btn {
+    flex: 1; padding: 7px 12px; border: none; background: none;
+    font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    color: var(--text-muted); cursor: pointer; transition: all 0.2s;
+  }
+
+  .prc-input-toggle-btn.active {
+    background: var(--surface-glow); color: var(--text);
+    border-radius: 20px;
+  }
+
+  /* Direct score input */
+  .prc-direct-input {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; padding: 20px 16px;
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); margin-bottom: 12px;
+  }
+
+  .prc-direct-input label {
+    font-size: 13px; font-weight: 600; color: var(--text-dim);
+  }
+
+  .prc-direct-input input {
+    width: 100px; padding: 12px 16px; text-align: center;
+    background: var(--bg); border: 2px solid var(--border);
+    border-radius: var(--radius-sm); font-family: 'Space Mono', monospace;
+    font-size: 24px; font-weight: 700; color: var(--text);
+    outline: none; transition: border-color 0.2s;
+    -moz-appearance: textfield;
+  }
+
+  .prc-direct-input input::-webkit-outer-spin-button,
+  .prc-direct-input input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+
+  .prc-direct-input input:focus { border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -992,7 +1061,7 @@
     <span class="nav-item-icon">✉️</span> Contact Us
   </button>
   <div class="nav-spacer"></div>
-  <div class="nav-version">v1.1</div>
+  <div class="nav-version">v1.2</div>
 </div>
 
 <!-- ═══════════ HOW TO PLAY PAGE ═══════════ -->
@@ -1031,6 +1100,10 @@
     <div class="rule-card">
       <div class="rule-title">Number Card: 13</div>
       <p>13 cards with value 13 are added to the deck — high reward but high bust risk.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-title">Lucky 13 🍀</div>
+      <p>You can hold <strong>two 13s</strong> without busting. Both score 13 and count toward your Flip 7. A third 13 would bust you.</p>
     </div>
     <div class="rule-card">
       <div class="rule-title">Negative Modifiers: −2, −4, −6, −8, −10</div>
@@ -1347,7 +1420,9 @@
       numbers: [],
       modifiers: [],
       flip7: false,
-      bust: false
+      bust: false,
+      inputMode: 'cards', // 'cards' | 'direct'
+      directScore: null
     }));
     renderRoundCards();
   }
@@ -1365,9 +1440,13 @@
       const score = calcPlayerRoundScore(pi);
       const cardCount = rs.numbers.length;
       const potentialTotal = p.total + score;
-      const hasInput = score > 0 || rs.bust;
+      const hasInput = score > 0 || rs.bust || (rs.inputMode === 'direct' && rs.directScore !== null);
       const hitsTarget = potentialTotal >= targetScore && !rs.bust;
       const cardClass = rs.bust ? 'busted' : rs.flip7 ? 'flip7' : '';
+      const isCards = rs.inputMode === 'cards';
+
+      // Count how many 13s are in the numbers array (for Lucky 13)
+      const count13 = rs.numbers.filter(n => n === 13).length;
 
       return `
         <div class="player-round-card ${cardClass}">
@@ -1375,7 +1454,7 @@
             <div class="prc-player">
               <span class="prc-dot" style="background:${p.color}"></span>
               <span class="prc-name">${p.name}</span>
-              ${cardCount > 0 && !rs.bust ? `<span class="card-counter ${cardCount >= 5 ? 'hot' : ''} ${rs.flip7 ? 'flip7-active' : ''}">${rs.flip7 ? '⭐ 7/7' : cardCount + '/7'}</span>` : ''}
+              ${isCards && cardCount > 0 && !rs.bust ? `<span class="card-counter ${cardCount >= 5 ? 'hot' : ''} ${rs.flip7 ? 'flip7-active' : ''}">${rs.flip7 ? '⭐ 7/7' : cardCount + '/7'}</span>` : ''}
             </div>
             <span class="prc-round-score ${rs.bust ? 'bust' : ''}">${rs.bust ? 'BUST' : rs.flip7 ? '⭐ +' + score : (score > 0 ? '+' + score : '—')}</span>
           </div>
@@ -1391,39 +1470,64 @@
 
           ${rs.flip7 ? `<div class="prc-flip7-note">🎉 Flip 7 — +15 bonus included</div>` : ''}
 
-          <div class="prc-cards-section">
-            <div class="prc-section-label">Number Cards <span class="card-count-hint">(${cardCount}/7)</span></div>
-            <div class="prc-number-cards">
-              ${numberCards.map(n => {
-                const sel = rs.numbers.includes(n);
-                return `<div class="num-card ${sel ? 'selected' : ''}" onclick="toggleNumber(${pi},${n})">${n}</div>`;
-              }).join('')}
-            </div>
+          <!-- Input mode toggle -->
+          <div class="prc-input-toggle">
+            <button class="prc-input-toggle-btn ${isCards ? 'active' : ''}" onclick="setInputMode(${pi},'cards')">🃏 Cards</button>
+            <button class="prc-input-toggle-btn ${!isCards ? 'active' : ''}" onclick="setInputMode(${pi},'direct')">✏️ Direct</button>
           </div>
 
-          <div class="prc-section-label">Modifiers ${isVeng ? '(positive)' : ''}</div>
-          <div class="prc-modifiers">
-            ${posMods.map(m => {
-              const sel = rs.modifiers.includes(m);
-              return `<div class="mod-btn ${sel ? 'selected' : ''}" onclick="toggleMod(${pi},'${m}')">${m}</div>`;
-            }).join('')}
-          </div>
-
-          ${isVeng ? `
-            <div class="mod-section-row">
-              <span class="mod-neg-label">Negative Modifiers</span>
+          ${isCards ? `
+            <div class="prc-cards-section">
+              <div class="prc-section-label">Number Cards <span class="card-count-hint">(${cardCount}/7)</span></div>
+              <div class="prc-number-cards">
+                ${numberCards.map(n => {
+                  if (n === 13 && isVeng) {
+                    // Lucky 13: special rendering
+                    const cls = count13 === 0 ? '' : count13 === 1 ? 'lucky13-one' : 'lucky13-two';
+                    return `<div class="num-card ${cls}" onclick="toggleNumber(${pi},${n})">${n}${count13 === 2 ? '<span class="lucky13-badge">×2</span>' : ''}</div>`;
+                  }
+                  const sel = rs.numbers.includes(n);
+                  return `<div class="num-card ${sel ? 'selected' : ''}" onclick="toggleNumber(${pi},${n})">${n}</div>`;
+                }).join('')}
+              </div>
             </div>
+
+            <div class="prc-section-label">Modifiers ${isVeng ? '(positive)' : ''}</div>
             <div class="prc-modifiers">
-              ${negMods.map(m => {
+              ${posMods.map(m => {
                 const sel = rs.modifiers.includes(m);
-                return `<div class="mod-btn negative ${sel ? 'selected' : ''}" onclick="toggleMod(${pi},'${m}')">${m}</div>`;
+                return `<div class="mod-btn ${sel ? 'selected' : ''}" onclick="toggleMod(${pi},'${m}')">${m}</div>`;
               }).join('')}
             </div>
-          ` : ''}
 
-          <div class="prc-actions">
-            <button class="prc-action-btn bust-btn ${rs.bust ? 'active' : ''}" onclick="toggleBust(${pi})">💥 Bust</button>
-          </div>
+            ${isVeng ? `
+              <div class="mod-section-row">
+                <span class="mod-neg-label">Negative Modifiers</span>
+              </div>
+              <div class="prc-modifiers">
+                ${negMods.map(m => {
+                  const sel = rs.modifiers.includes(m);
+                  return `<div class="mod-btn negative ${sel ? 'selected' : ''}" onclick="toggleMod(${pi},'${m}')">${m}</div>`;
+                }).join('')}
+              </div>
+            ` : ''}
+
+            <div class="prc-actions">
+              <button class="prc-action-btn bust-btn ${rs.bust ? 'active' : ''}" onclick="toggleBust(${pi})">💥 Bust</button>
+            </div>
+          ` : `
+            <!-- Direct score entry -->
+            <div class="prc-direct-input">
+              <label>Score</label>
+              <input type="number" inputmode="numeric" placeholder="0"
+                value="${rs.directScore !== null ? rs.directScore : ''}"
+                onchange="setDirectScore(${pi}, this.value)"
+                oninput="setDirectScore(${pi}, this.value)">
+            </div>
+            <div class="prc-actions">
+              <button class="prc-action-btn bust-btn ${rs.bust ? 'active' : ''}" onclick="toggleBust(${pi})">💥 Bust</button>
+            </div>
+          `}
         </div>
       `;
     }).join('');
@@ -1433,12 +1537,28 @@
   function toggleNumber(pi, n) {
     const rs = roundState[pi];
     if (rs.bust) { rs.bust = false; }
-    const idx = rs.numbers.indexOf(n);
-    if (idx === -1) {
-      if (rs.numbers.length >= 7) return;
-      rs.numbers.push(n);
+
+    // Lucky 13: in Vengeance mode, 13 can be selected up to twice
+    if (n === 13 && gameMode === 'vengeance') {
+      const count13 = rs.numbers.filter(x => x === 13).length;
+      if (count13 === 0) {
+        if (rs.numbers.length >= 7) return;
+        rs.numbers.push(13);
+      } else if (count13 === 1) {
+        if (rs.numbers.length >= 7) return;
+        rs.numbers.push(13); // Add second 13 (Lucky 13)
+      } else {
+        // Remove both 13s
+        rs.numbers = rs.numbers.filter(x => x !== 13);
+      }
     } else {
-      rs.numbers.splice(idx, 1);
+      const idx = rs.numbers.indexOf(n);
+      if (idx === -1) {
+        if (rs.numbers.length >= 7) return;
+        rs.numbers.push(n);
+      } else {
+        rs.numbers.splice(idx, 1);
+      }
     }
 
     const wasFlip7 = rs.flip7;
@@ -1476,14 +1596,78 @@
       rs.numbers = [];
       rs.modifiers = [];
       rs.flip7 = false;
+      rs.directScore = null;
     }
     renderRoundCards();
+  }
+
+  function setInputMode(pi, mode) {
+    const rs = roundState[pi];
+    if (rs.inputMode === mode) return;
+    rs.inputMode = mode;
+    // Clear the other mode's data when switching
+    if (mode === 'direct') {
+      rs.numbers = [];
+      rs.modifiers = [];
+      rs.flip7 = false;
+      rs.bust = false;
+    } else {
+      rs.directScore = null;
+      rs.bust = false;
+    }
+    renderRoundCards();
+  }
+
+  function setDirectScore(pi, val) {
+    const rs = roundState[pi];
+    const num = parseInt(val);
+    rs.directScore = isNaN(num) ? null : num;
+    if (rs.bust) rs.bust = false;
+    // Don't re-render here to avoid losing cursor; just update projection
+    updateProjection(pi);
+  }
+
+  function updateProjection(pi) {
+    // Lightweight projection update without full re-render
+    const rs = roundState[pi];
+    const score = calcPlayerRoundScore(pi);
+    const potentialTotal = players[pi].total + score;
+    const hitsTarget = potentialTotal >= targetScore && !rs.bust;
+    const cards = document.querySelectorAll('.player-round-card');
+    if (!cards[pi]) return;
+    const header = cards[pi].querySelector('.prc-round-score');
+    if (header) header.textContent = score > 0 ? '+' + score : '—';
+
+    // Update or create projection row
+    let proj = cards[pi].querySelector('.prc-projection');
+    if (score > 0 || rs.bust) {
+      if (!proj) {
+        proj = document.createElement('div');
+        proj.className = 'prc-projection';
+        const header = cards[pi].querySelector('.prc-header');
+        header.insertAdjacentElement('afterend', proj);
+      }
+      proj.className = `prc-projection ${hitsTarget ? 'wins' : ''}`;
+      proj.innerHTML = `
+        <span class="proj-current">${players[pi].total}</span>
+        <span class="proj-operator">${rs.bust ? '+0' : '+' + score}</span>
+        <span class="proj-arrow">→</span>
+        <span class="proj-total ${hitsTarget ? 'proj-winner' : ''}">${potentialTotal}${hitsTarget ? ' 🏆' : ''}</span>
+      `;
+    } else if (proj) {
+      proj.remove();
+    }
   }
 
   // ── Score Calculation ──
   function calcPlayerRoundScore(pi) {
     const rs = roundState[pi];
     if (rs.bust) return 0;
+
+    // Direct score mode
+    if (rs.inputMode === 'direct') {
+      return rs.directScore !== null ? rs.directScore : 0;
+    }
 
     let numSum = rs.numbers.reduce((a, b) => a + b, 0);
 
